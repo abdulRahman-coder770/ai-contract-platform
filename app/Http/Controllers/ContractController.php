@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use Smalot\PdfParser\Parser;
 
 class ContractController extends Controller
 {
@@ -29,13 +30,44 @@ class ContractController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
-            'body' => 'required|string',
+            'body' => 'nullable|string',
+            'contract_file' => 'nullable|file|mimes:pdf|max:10240', // Max 10MB PDF
         ]);
 
-        $aiData = null;
+        $contractText = $validated['body'] ?? '';
         $errorMessage = null;
 
-        // 2. Define the exact system prompt instructing the AI to output JSON only
+        // 2. Extract text if a PDF was uploaded
+        if ($request->hasFile('contract_file')) {
+            try {
+                $file = $request->file('contract_file');
+                $parser = new Parser();
+                $pdf = $parser->parseFile($file->getPathname());
+                
+                // Extract all visible text from the PDF structure
+                $contractText = $pdf->getText();
+                
+                if (empty(trim($contractText))) {
+                    throw new \Exception("The PDF file appears to be empty or contains only scanned images.");
+                }
+            } catch (\Exception $e) {
+                Log::error('PDF Text Extraction Failed: ' . $e->getMessage());
+                return redirect()->back()->withErrors([
+                    'contract_file' => 'Failed to extract text from the PDF: ' . $e->getMessage()
+                ]);
+            }
+        }
+
+        // Defensive check: Ensure we have some text to analyze
+        if (empty(trim($contractText))) {
+            return redirect()->back()->withErrors([
+                'body' => 'Please provide contract text or upload a valid text-based PDF.'
+            ]);
+        }
+
+        $aiData = null;
+
+        // 3. Define the exact system prompt instructing the AI to output JSON only
         $systemPrompt = "You are a legal AI compliance officer. Analyze the provided contract text. "
             . "You MUST respond with a valid, raw JSON object ONLY. Do not wrap the JSON in markdown code blocks "
             . "(do not use ```json or ```). No conversational preamble or postscript. "
@@ -51,8 +83,8 @@ class ContractController extends Controller
             $response = Http::timeout(90)
                 ->withoutVerifying()
                 ->post('http://host.docker.internal:11434/api/generate', [
-                    'model'  => 'llama3.2', 
-                    'prompt' => $systemPrompt . "\n\nContract Text:\n" . $validated['body'],
+                    'model'  => 'llama3.2', // Matching your locally running llama3.2 model
+                    'prompt' => $systemPrompt . "\n\nContract Text:\n" . $contractText,
                     'stream' => false,
                     'format' => 'json' // Instructs Ollama's engine to force JSON mode
                 ]);
@@ -69,7 +101,7 @@ class ContractController extends Controller
 
             // Extract and clean raw text response from Ollama
             $rawAiText = $responseBody['response'];
-            $cleanJson = trim(preg_replace('/^
+             $cleanJson = trim(preg_replace('/^
                 ```(?:json)?|```$/im', '', $rawAiText));
             // Parse response string into PHP array
             $aiData = json_decode($cleanJson, true);
@@ -99,7 +131,7 @@ class ContractController extends Controller
         $request->user()->contracts()->create([
             'title'       => $validated['title'],
             'description' => $validated['description'],
-            'body'        => $validated['body'],
+            'body'        => $contractText,
             'status'      => $errorMessage ? 'failed' : 'review',
             'analysis'    => $aiData,
         ]);
