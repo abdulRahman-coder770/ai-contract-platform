@@ -17,6 +17,9 @@ return [
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],
+    'ollama' => [
+    'url' => env('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'),
+],
 
     'resend' => [
         'key' => env('RESEND_API_KEY'),
@@ -34,5 +37,7 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
-
+'gemini' => [
+    'key' => env('GEMINI_API_KEY'),
+],
 ];
