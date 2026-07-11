@@ -17,14 +17,10 @@ class AnalyzeContractJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * Delete the job if the model is missing.
-     */
+
     public $deleteWhenMissingModels = true;
 
-    /**
-     * Create a new job instance.
-     */
+
     public function __construct(protected Contract $contract) {}
 
   
@@ -62,5 +58,10 @@ public function handle(): void
 
     
     event(new \App\Events\ContractAnalyzedEvent($contract));
-}
+    }
+public function failed(\Throwable $exception): void
+    {
+       
+        $this->contract->update(['status' => 'failed']);
+    }
 }
