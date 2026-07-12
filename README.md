@@ -61,6 +61,14 @@ php artisan serve
 🤝 Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+## Testing
+This project follows professional testing standards:
+- **Feature Tests:** Validates system resilience by simulating background job failures.
+- **Unit Tests:** Ensures core business logic (confidence thresholds) works in isolation.
+
+Run the test suite with:
+`php artisan test`
+
 📄 License
 This project is open-sourced software licensed under the MIT license.
 
